@@ -7,7 +7,14 @@
 
 #include <unordered_map>
 #include <iostream>
-#include <random>
+#if defined(__GNUC_MINOR__) && ( __GNUC_MINOR__ <= 4 ) && (__INTEL_COMPILER) && (__INTEL_COMPILER == 1600)
+#   include <boost/random.hpp>
+#   include <boost/random/random_device.hpp>
+#   define __INTEL_COMPLIER_GCC44
+#   define WITH_NO_NULLFUNC
+#else
+#   include <random>
+#endif
 #include <atomic>
 #include <list>
 
@@ -140,13 +147,24 @@ namespace SimpleWeb {
         
         ///fin_rsv_opcode: 129=one fragment, text, 130=one fragment, binary, 136=close connection.
         ///See http://tools.ietf.org/html/rfc6455#section-5.2 for more information
+#ifdef	WITH_NO_NULLFUNC
+        void send(const std::shared_ptr<SendStream> &message_stream,
+			const std::function<void(const boost::system::error_code&)>& callback=[](const boost::system::error_code& e){},
+#else
         void send(const std::shared_ptr<SendStream> &message_stream, const std::function<void(const boost::system::error_code&)>& callback=nullptr,
-                  unsigned char fin_rsv_opcode=129) {
+#endif
+			unsigned char fin_rsv_opcode=129) {
             //Create mask
             std::vector<unsigned char> mask;
             mask.resize(4);
+#ifdef __INTEL_COMPLIER_GCC44
+	        boost::random::uniform_int_distribution<> dist(0,UCHAR_MAX);
+            boost::random::random_device seed;
+            boost::random::mt19937_64 rd(seed());
+#else
             std::uniform_int_distribution<unsigned short> dist(0,255);
             std::random_device rd;
+#endif
             for(int c=0;c<4;c++) {
                 mask[c]=static_cast<unsigned char>(dist(rd));
             }
@@ -190,7 +208,12 @@ namespace SimpleWeb {
             });
         }
         
+#ifdef	WITH_NO_NULLFUNC
+        void send_close(int status, const std::string& reason="",
+			const std::function<void(const boost::system::error_code&)>& callback=[](const boost::system::error_code e){}) {
+#else
         void send_close(int status, const std::string& reason="", const std::function<void(const boost::system::error_code&)>& callback=nullptr) {
+#endif
             //Send close only once (in case close is initiated by client)
             if(connection->closed.load()) {
                 return;
@@ -262,8 +285,14 @@ namespace SimpleWeb {
             //Make random 16-byte nonce
             std::string nonce;
             nonce.resize(16);
+#ifdef __INTEL_COMPLIER_GCC44
+            boost::random::uniform_int_distribution<> dist(0,UCHAR_MAX);
+            boost::random::random_device seed;
+            boost::random::mt19937_64 rd(seed());
+#else
             std::uniform_int_distribution<unsigned short> dist(0,255);
             std::random_device rd;
+#endif
             for(int c=0;c<16;c++)
                 nonce[c]=static_cast<unsigned char>(dist(rd));
 
@@ -462,7 +491,11 @@ namespace SimpleWeb {
         
     protected:
         void connect() {
+#ifdef __INTEL_COMPLIER_GCC44
+            boost::asio::ip::tcp::resolver::query query(host, std::to_string(static_cast<unsigned long long>(port)));
+#else
             boost::asio::ip::tcp::resolver::query query(host, std::to_string(port));
+#endif
             
             resolver->async_resolve(query, [this]
                     (const boost::system::error_code &ec, boost::asio::ip::tcp::resolver::iterator it){

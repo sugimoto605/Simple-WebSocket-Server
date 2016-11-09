@@ -108,7 +108,11 @@ int main() {
     });
     
     //Wait for server to start so that the client can connect
+#ifdef __INTEL_COMPLIER_GCC44
+	boost::this_thread::sleep(boost::posix_time::seconds(1));
+#else
     this_thread::sleep_for(chrono::seconds(1));
+#endif
     
     //Example 4: Client communication with server
     //Possible output:

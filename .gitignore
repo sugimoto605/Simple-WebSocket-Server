@@ -10,6 +10,8 @@ install_manifest.txt
 Testing
 compile_commands.json
 
+build
+
 # executables
 ws_examples
 wss_examples

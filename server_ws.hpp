@@ -6,6 +6,21 @@
 #include <boost/asio.hpp>
 #include <boost/asio/spawn.hpp>
 
+#if defined(__GNUC_MINOR__) && ( __GNUC_MINOR__ <= 4 ) && (__INTEL_COMPILER) && (__INTEL_COMPILER == 1600)
+#   include <boost/thread.hpp>
+#   define __INTEL_COMPLIER_GCC44
+#   define WITH_NO_NULLFUNC
+#   include <boost/regex.hpp>
+#	define REGEX_NS boost
+#else
+#	ifdef USE_BOOST_REGEX
+#		include <boost/regex.hpp>
+#		define REGEX_NS boost
+#	else
+#		include <regex>
+#		define REGEX_NS std
+#	endif
+#endif
 #include <unordered_map>
 #include <thread>
 #include <mutex>
@@ -16,13 +31,6 @@
 #include <iostream>
 
 // Late 2017 TODO: remove the following checks and always use std::regex
-#ifdef USE_BOOST_REGEX
-#include <boost/regex.hpp>
-#define REGEX_NS boost
-#else
-#include <regex>
-#define REGEX_NS std
-#endif
 
 namespace SimpleWeb {
     template <class socket_type>
@@ -146,18 +154,32 @@ namespace SimpleWeb {
             friend class SocketServerBase<socket_type>;
         private:
             std::unordered_set<std::shared_ptr<Connection> > connections;
+#ifdef __INTEL_COMPLIER_GCC44
+			std::shared_ptr<std::mutex> connections_mutex;
+#else
             std::mutex connections_mutex;
+#endif
 
         public:            
+#ifdef __INTEL_COMPLIER_GCC44
+			Endpoint(){connections_mutex.reset(new std::mutex);}
+			~Endpoint(){connections_mutex.reset();}
+#endif
             std::function<void(std::shared_ptr<Connection>)> onopen;
             std::function<void(std::shared_ptr<Connection>, std::shared_ptr<Message>)> onmessage;
             std::function<void(std::shared_ptr<Connection>, const boost::system::error_code&)> onerror;
             std::function<void(std::shared_ptr<Connection>, int, const std::string&)> onclose;
             
             std::unordered_set<std::shared_ptr<Connection> > get_connections() {
+#ifdef __INTEL_COMPLIER_GCC44
+                connections_mutex->lock();
+                auto copy=connections;
+                connections_mutex->unlock();
+#else
                 connections_mutex.lock();
                 auto copy=connections;
                 connections_mutex.unlock();
+#endif
                 return copy;
             }
         };
@@ -239,8 +261,13 @@ namespace SimpleWeb {
         
         ///fin_rsv_opcode: 129=one fragment, text, 130=one fragment, binary, 136=close connection.
         ///See http://tools.ietf.org/html/rfc6455#section-5.2 for more information
+#ifdef  WITH_NO_NULLFUNC
+        void send(const std::shared_ptr<Connection> &connection, const std::shared_ptr<SendStream> &message_stream, 
+                const std::function<void(const boost::system::error_code&)>& callback=[](const boost::system::error_code& ec){}, 
+#else
         void send(const std::shared_ptr<Connection> &connection, const std::shared_ptr<SendStream> &message_stream, 
                 const std::function<void(const boost::system::error_code&)>& callback=nullptr, 
+#endif
                 unsigned char fin_rsv_opcode=129) const {
             if(fin_rsv_opcode!=136)
                 timer_idle_reset(connection);
@@ -276,8 +303,13 @@ namespace SimpleWeb {
             });
         }
 
+#ifdef  WITH_NO_NULLFUNC
+        void send_close(const std::shared_ptr<Connection> &connection, int status, const std::string& reason="",
+                const std::function<void(const boost::system::error_code&)>& callback=[](const boost::system::error_code&){}) const {
+#else
         void send_close(const std::shared_ptr<Connection> &connection, int status, const std::string& reason="",
                 const std::function<void(const boost::system::error_code&)>& callback=nullptr) const {
+#endif
             //Send close only once (in case close is initiated by server)
             if(connection->closed.load()) {
                 return;
@@ -298,9 +330,15 @@ namespace SimpleWeb {
         std::unordered_set<std::shared_ptr<Connection> > get_connections() {
             std::unordered_set<std::shared_ptr<Connection> > all_connections;
             for(auto& e: endpoint) {
+#ifdef __INTEL_COMPLIER_GCC44
+                e.second.connections_mutex->lock();
+                all_connections.insert(e.second.connections.begin(), e.second.connections.end());
+                e.second.connections_mutex->unlock();
+#else
                 e.second.connections_mutex.lock();
                 all_connections.insert(e.second.connections.begin(), e.second.connections.end());
                 e.second.connections_mutex.unlock();
+#endif
             }
             return all_connections;
         }
@@ -577,33 +615,45 @@ namespace SimpleWeb {
         
         void connection_open(const std::shared_ptr<Connection> &connection, Endpoint& endpoint) {
             timer_idle_init(connection);
-            
+#ifdef __INTEL_COMPLIER_GCC44
+            endpoint.connections_mutex->lock();
+            endpoint.connections.insert(connection);
+            endpoint.connections_mutex->unlock();
+#else
             endpoint.connections_mutex.lock();
             endpoint.connections.insert(connection);
             endpoint.connections_mutex.unlock();
-            
+#endif
             if(endpoint.onopen)
                 endpoint.onopen(connection);
         }
         
         void connection_close(const std::shared_ptr<Connection> &connection, Endpoint& endpoint, int status, const std::string& reason) const {
             timer_idle_cancel(connection);
-            
+#ifdef __INTEL_COMPLIER_GCC44
+            endpoint.connections_mutex->lock();
+            endpoint.connections.erase(connection);
+            endpoint.connections_mutex->unlock();    
+#else
             endpoint.connections_mutex.lock();
             endpoint.connections.erase(connection);
             endpoint.connections_mutex.unlock();    
-            
+#endif
             if(endpoint.onclose)
                 endpoint.onclose(connection, status, reason);
         }
         
         void connection_error(const std::shared_ptr<Connection> &connection, Endpoint& endpoint, const boost::system::error_code& ec) const {
             timer_idle_cancel(connection);
-            
+#ifdef __INTEL_COMPLIER_GCC44
+            endpoint.connections_mutex->lock();
+            endpoint.connections.erase(connection);
+            endpoint.connections_mutex->unlock();
+#else
             endpoint.connections_mutex.lock();
             endpoint.connections.erase(connection);
             endpoint.connections_mutex.unlock();
-            
+#endif
             if(endpoint.onerror) {
                 boost::system::error_code ec_tmp=ec;
                 endpoint.onerror(connection, ec_tmp);
