@@ -10,6 +10,7 @@
 #   include <boost/thread.hpp>
 #   define __INTEL_COMPLIER_GCC44
 #   define WITH_NO_NULLFUNC
+#   define WITH_NO_UNORDERED_SET
 #   include <boost/regex.hpp>
 #	define REGEX_NS boost
 #else
@@ -24,7 +25,12 @@
 #include <unordered_map>
 #include <thread>
 #include <mutex>
-#include <unordered_set>
+#ifdef	WITH_NO_UNORDERED_SET
+#	define	STD_SET	std::set
+#else
+#	define	STD_SET	std::unordered_set
+#	include <unordered_set>
+#endif
 #include <list>
 #include <memory>
 #include <atomic>
@@ -153,9 +159,9 @@ namespace SimpleWeb {
         class Endpoint {
             friend class SocketServerBase<socket_type>;
         private:
-            std::unordered_set<std::shared_ptr<Connection> > connections;
+            STD_SET<std::shared_ptr<Connection> > connections;
 #ifdef __INTEL_COMPLIER_GCC44
-			std::shared_ptr<std::mutex> connections_mutex;
+		std::shared_ptr<std::mutex> connections_mutex;
 #else
             std::mutex connections_mutex;
 #endif
@@ -170,7 +176,7 @@ namespace SimpleWeb {
             std::function<void(std::shared_ptr<Connection>, const boost::system::error_code&)> onerror;
             std::function<void(std::shared_ptr<Connection>, int, const std::string&)> onclose;
             
-            std::unordered_set<std::shared_ptr<Connection> > get_connections() {
+            STD_SET<std::shared_ptr<Connection> > get_connections() {
 #ifdef __INTEL_COMPLIER_GCC44
                 connections_mutex->lock();
                 auto copy=connections;
@@ -327,21 +333,27 @@ namespace SimpleWeb {
             send(connection, send_stream, callback, 136);
         }
         
-        std::unordered_set<std::shared_ptr<Connection> > get_connections() {
-            std::unordered_set<std::shared_ptr<Connection> > all_connections;
-            for(auto& e: endpoint) {
 #ifdef __INTEL_COMPLIER_GCC44
+        std::set<std::shared_ptr<Connection> > get_connections() {
+            std::set<std::shared_ptr<Connection> > all_connections;
+            for(auto& e: endpoint) {
                 e.second.connections_mutex->lock();
                 all_connections.insert(e.second.connections.begin(), e.second.connections.end());
                 e.second.connections_mutex->unlock();
-#else
-                e.second.connections_mutex.lock();
-                all_connections.insert(e.second.connections.begin(), e.second.connections.end());
-                e.second.connections_mutex.unlock();
-#endif
             }
             return all_connections;
         }
+#else
+        std::unordered_set<std::shared_ptr<Connection> > get_connections() {
+            std::unordered_set<std::shared_ptr<Connection> > all_connections;
+            for(auto& e: endpoint) {
+                e.second.connections_mutex.lock();
+                all_connections.insert(e.second.connections.begin(), e.second.connections.end());
+                e.second.connections_mutex.unlock();
+            }
+            return all_connections;
+        }
+#endif
         
         /// If you have your own boost::asio::io_service, store its pointer here before running start().
         /// You might also want to set config.num_threads to 0.
@@ -597,7 +609,11 @@ namespace SimpleWeb {
                         if((fin_rsv_opcode&0x0f)==9) {
                             //send pong
                             auto empty_send_stream=std::make_shared<SendStream>();
+#ifdef  WITH_NO_NULLFUNC
+                            send(connection, empty_send_stream, [](const boost::system::error_code& ec){}, fin_rsv_opcode+1);
+#else
                             send(connection, empty_send_stream, nullptr, fin_rsv_opcode+1);
+#endif
                         }
                         else if(endpoint.onmessage) {
                             timer_idle_reset(connection);

@@ -8,7 +8,7 @@ typedef SimpleWeb::SocketClient<SimpleWeb::WS> WsClient;
 
 int main() {
     //WebSocket (WS)-server at port 8080 using 1 thread
-    WsServer server(8080, 1);
+    WsServer server(8083, 1);
     
     //Example 1: echo WebSocket endpoint
     //  Added debug messages for example use of the callbacks
@@ -125,7 +125,7 @@ int main() {
     //Client: Sending close connection
     //Server: Closed connection 140184920260656 with status code 1000
     //Client: Closed connection with status code 1000
-    WsClient client("localhost:8080/echo");
+    WsClient client("localhost:8083/echo");
     client.onmessage=[&client](shared_ptr<WsClient::Message> message) {
         auto message_str=message->string();
         
