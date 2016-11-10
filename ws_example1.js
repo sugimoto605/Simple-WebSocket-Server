@@ -7,10 +7,14 @@ TextBox.prototype.write=function(msg){
 TextBox.prototype.writeln=function(msg){
 	target.val(target.val()+msg+'\n');
 }
+TextBox.prototype.clear=function(){
+	target.val('');
+}
 
 
 $(function() {
 	my_con=new TextBox('OUTPUT');
+	var addr=$('#ADDRESS').val();
 	my_con.writeln("Test on "+addr+"\n1. Start ws_example1\n2: Reload this form\n3: Use [send][close]");
 	var ws;
 	$('#SW0').click(function(){
@@ -38,5 +42,8 @@ $(function() {
 	});
 	$('#SW2').click(function(){
 		ws.close();
+	});
+	$('#SW3').click(function(){
+		my_con.clear();
 	});
 });

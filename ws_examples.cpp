@@ -7,8 +7,14 @@ typedef SimpleWeb::SocketServer<SimpleWeb::WS> WsServer;
 typedef SimpleWeb::SocketClient<SimpleWeb::WS> WsClient;
 
 int main() {
+	std::cout << "Enter port[8080]:";
+	std::string port_str;
+	std::getline(std::cin,port_str);
+	unsigned long long port;
+	if (port_str=="") port=8080; else port=std::stoull(port_str);
+	std::cout << "Use port=" << port << std::endl;
     //WebSocket (WS)-server at port 8080 using 1 thread
-    WsServer server(8083, 1);
+    WsServer server(port, 1);
     
     //Example 1: echo WebSocket endpoint
     //  Added debug messages for example use of the callbacks
@@ -125,7 +131,7 @@ int main() {
     //Client: Sending close connection
     //Server: Closed connection 140184920260656 with status code 1000
     //Client: Closed connection with status code 1000
-    WsClient client("localhost:8083/echo");
+    WsClient client("localhost:"+std::to_string(port)+"/echo");
     client.onmessage=[&client](shared_ptr<WsClient::Message> message) {
         auto message_str=message->string();
         

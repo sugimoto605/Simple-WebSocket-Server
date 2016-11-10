@@ -333,27 +333,21 @@ namespace SimpleWeb {
             send(connection, send_stream, callback, 136);
         }
         
-#ifdef __INTEL_COMPLIER_GCC44
-        std::set<std::shared_ptr<Connection> > get_connections() {
-            std::set<std::shared_ptr<Connection> > all_connections;
+        STD_SET<std::shared_ptr<Connection> > get_connections() {
+            STD_SET<std::shared_ptr<Connection> > all_connections;
             for(auto& e: endpoint) {
+#ifdef __INTEL_COMPLIER_GCC44
                 e.second.connections_mutex->lock();
                 all_connections.insert(e.second.connections.begin(), e.second.connections.end());
                 e.second.connections_mutex->unlock();
-            }
-            return all_connections;
-        }
 #else
-        std::unordered_set<std::shared_ptr<Connection> > get_connections() {
-            std::unordered_set<std::shared_ptr<Connection> > all_connections;
-            for(auto& e: endpoint) {
                 e.second.connections_mutex.lock();
                 all_connections.insert(e.second.connections.begin(), e.second.connections.end());
                 e.second.connections_mutex.unlock();
+#endif
             }
             return all_connections;
         }
-#endif
         
         /// If you have your own boost::asio::io_service, store its pointer here before running start().
         /// You might also want to set config.num_threads to 0.
